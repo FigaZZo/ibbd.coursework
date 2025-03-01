@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>User Registration</title>
+</head>
+<body>
+<h1>User Registration</h1>
+<form th:action="@{/user/register}" method="post" th:object="${user}">
+  <div>
+    <label for="username">Username:</label>
+    <input type="text" id="username" th:field="*{username}" required />
+  </div>
+  <div>
+    <label for="phoneNumber">Phone Number:</label>
+    <input type="text" id="phoneNumber" th:field="*{phoneNumber}" required />
+  </div>
+  <div>
+    <label for="name">Name:</label>
+    <input type="text" id="name" th:field="*{name}" required />
+  </div>
+  <div>
+    <label for="password">Password:</label>
+    <input type="password" id="password" th:field="*{password}" required />
+  </div>
+  <div>
+    <button type="submit">Register</button>
+  </div>
+</form>
+<div th:if="${param.error}">
+  Registration failed. Please try again.
+</div>
+</body>
+</html>

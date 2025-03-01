@@ -1,0 +1,26 @@
+spring:
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+
+  application:
+    name: laba4
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: admin
+  jpa:
+    hibernate.ddl-auto: validate
+    properties.hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+  mvc:
+    log-request-details: true
+logging:
+  level:
+    root: INFO
+    org.hibernate.type: TRACE
+    org.hibernate.SQL: TRACE
+    org.springframework.web: trace
+server:
+  error:
+    whitelabel:
+      enabled: false

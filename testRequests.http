@@ -1,0 +1,16 @@
+### POST user request
+POST http://localhost:8080/userTable/callTaxi
+Content-Type: application/json
+
+{
+  "pickUpLocation": {
+    "first": 31,
+    "second": 10
+  },
+  "dropOffLocation": {
+    "first": 10,
+    "second": 10
+  },
+  "fare": "Econom",
+  "user": "dias"
+}
