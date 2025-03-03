@@ -5,4 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 
 @Repository
-interface CarRepository: JpaRepository<Car, String>
+interface CarRepository: JpaRepository<Car, String> {
+    fun findByDriverUsername(driverUsername: String): Car?
+}

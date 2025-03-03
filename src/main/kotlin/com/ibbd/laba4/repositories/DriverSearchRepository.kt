@@ -7,4 +7,6 @@ import org.springframework.stereotype.Repository
 @Repository
 interface DriverSearchRepository: JpaRepository<DriverSearch, Int> {
     fun findAllByClientUsername(username: String): List<DriverSearch>
+
+    fun existsByClientUsername(username: String): Boolean
 }

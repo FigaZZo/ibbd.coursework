@@ -5,7 +5,7 @@
 </head>
 <body>
 <h1>User Registration</h1>
-<form th:action="@{/user/register}" method="post" th:object="${user}">
+<form th:action="@{/client/register}" method="post" th:object="${client}">
   <div>
     <label for="username">Username:</label>
     <input type="text" id="username" th:field="*{username}" required />
@@ -20,7 +20,7 @@
   </div>
   <div>
     <label for="password">Password:</label>
-    <input type="password" id="password" th:field="*{password}" required />
+    <input type="text" id="password" th:field="*{password}" required />
   </div>
   <div>
     <button type="submit">Register</button>

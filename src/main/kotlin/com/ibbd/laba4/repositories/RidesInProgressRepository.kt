@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository
 @Repository
 interface RidesInProgressRepository: JpaRepository<RidesInProgress, Int> {
     fun findAllByClientUsername(username: String): List<RidesInProgress>
+    fun existsByClientUsername(username: String): Boolean
 
     fun findAllByDriverUsername(driverUsername: String): List<RidesInProgress>
 }

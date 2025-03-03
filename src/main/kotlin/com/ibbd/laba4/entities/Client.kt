@@ -25,9 +25,6 @@ class Client(
         (clientDTO.name ?: throw NullPointerException("Name is null")),
         (clientDTO.rating ?: 5.0),
     )
-
-    @Transient
-    internal var used: Boolean = false
 }
 
 data class ClientDTO(
@@ -38,6 +35,6 @@ data class ClientDTO(
     var password: String? = null
 ) {
     override fun toString(): String {
-        return "UserDTO(username=$username, phoneNumber=$phoneNumber, name=$name, rating=$rating)"
+        return "UserDTO(username=$username, phoneNumber=$phoneNumber, name=$name, rating=$rating, password=$password)"
     }
 }

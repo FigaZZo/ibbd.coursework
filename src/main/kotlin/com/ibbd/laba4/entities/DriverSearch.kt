@@ -37,9 +37,7 @@ class DriverSearch(
         driver.dropOffLocation?.let{ "(${it.first}, ${it.second})" } ?: throw NullPointerException("Invalid drop off location"),
         client,
         fare
-    ) {
-        client.used = true
-    }
+    ) {}
 }
 
 data class DriverSearchDTO(

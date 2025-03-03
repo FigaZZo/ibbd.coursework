@@ -35,12 +35,13 @@ class SecurityConfig (
                 it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             }
             .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter::class.java)
+//            .httpBasic { it.}
             .build()
     }
 
     @Bean
     fun passwordEncoder(): PasswordEncoder {
-        return BCryptPasswordEncoder()
+        return BCryptPasswordEncoder(10)
     }
 
     @Bean

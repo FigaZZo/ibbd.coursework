@@ -1,5 +1,6 @@
 package com.ibbd.laba4.services
 
+import com.ibbd.laba4.controllers.InternalServerError
 import com.ibbd.laba4.controllers.UniqueId
 import com.ibbd.laba4.repositories.*
 import org.springframework.stereotype.Service
@@ -10,11 +11,16 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.userdetails.UsernameNotFoundException
 import java.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
-private fun <T> List<T>.myNullCheck(): List<T>? = if (this.isEmpty()) null else this
+private fun <T> List<T>.myNullCheck(): T? {
+    if(this.isEmpty()) return null
+    if(this.size > 1) throw InternalServerError("Database storage error")
+    return this[0]
+}
 
 @Service
 class BasicService(
@@ -27,7 +33,8 @@ class BasicService(
     private val carRepository: CarRepository,
     private val jwtService: JwtService,
     private val myUserDetailsService: MyUserDetailsService,
-    private val authenticationManager: AuthenticationManager
+    private val authenticationManager: AuthenticationManager,
+    private val userWithPasswordRepository: UserWithPasswordRepository
 ) {
     fun getUsers(): Map<String, Any> {
         return mapOf(
@@ -71,7 +78,22 @@ class BasicService(
         )
     }
 
-    fun addUser(client: Client): Unit {
+    fun getClientPersonalInfo(username: String): Map<String, Any> {
+        return mapOf(
+            "Rides" to (ridesHistoryRepository.findByClientUsername(username) ?: "No rides"),
+            "Personal info" to clientRepository.findById(username)
+        )
+    }
+
+    fun getDriverPersonalInfo(username: String): Map<String, Any> {
+        return mapOf(
+            "Rides" to (ridesHistoryRepository.findByDriverUsername(username) ?: "No rides"),
+            "Personal info" to driverRepository.findById(username),
+            "Cars" to (carRepository.findByDriverUsername(username) ?: "No cars")
+        )
+    }
+
+    fun addUser(client: Client, password: String, role: String): Unit {
         clientRepository.findByIdOrNull(client.username)
             ?.let {
                 throw UniqueId("Username already exists")
@@ -83,15 +105,17 @@ class BasicService(
             }
 
         clientRepository.save(client)
+        userWithPasswordRepository.save(UserWithPassword(client.username, password, role))
     }
 
-    fun addDriver(driver: Driver): Unit {
+    fun addDriver(driver: Driver, password: String, role: String): Unit {
         driverRepository.findByIdOrNull(driver.username)
             ?.let { throw UniqueId("Username already exists") }
         driverRepository.findAllByPhoneNumber(driver.phoneNumber)
             .myNullCheck()
             ?.let { throw UniqueId("Phone number already exists") }
 
+        userWithPasswordRepository.save(UserWithPassword(driver.username, password, role))
         driverRepository.save(driver)
     }
 
@@ -137,8 +161,6 @@ class BasicService(
                 "User not found for callTaxi",
                 HttpStatus.NOT_FOUND
             )
-        if (client.used)
-            return ResponseEntity("Can not call more than one taxi in callTaxi", HttpStatus.BAD_REQUEST)
 
         val fare: FareType = fareTypeRepository.findByIdOrNull(taxi.fare)
             ?: return ResponseEntity(
@@ -147,13 +169,18 @@ class BasicService(
             )
 
         DriverSearch(taxi, client, fare).also {
+            if (driverSearchRepository.existsByClientUsername(it.client.username) ||
+                ridesInProgressRepository.existsByClientUsername(it.client.username)
+            ) {
+                return ResponseEntity("Client cannot call another taxi while having active order", HttpStatus.BAD_REQUEST)
+            }
             driverSearchRepository.save(it)
         }
 
         return ResponseEntity(HttpStatus.ACCEPTED)
     }
 
-    fun cancelOrder(username: String): ResponseEntity<String> {
+    fun cancelSearch(username: String): ResponseEntity<String> {
         clientRepository.findByIdOrNull(username)
             ?.let { client ->
                 driverSearchRepository.findAllByClientUsername(client.username).myNullCheck()
@@ -161,14 +188,14 @@ class BasicService(
                         ridesHistoryRepository.save(
                             RidesHistory(
                                 null,
-                                it[0].pickUpLocation,
-                                it[0].dropOffLocation,
+                                it.pickUpLocation,
+                                it.dropOffLocation,
                                 "DefaultPickUpTimeRidesHistory",
                                 "DefaultDropOffTiimeRidesHistory",
                                 "Client canceled driver search",
                                 client,
                                 driver = null,
-                                it[0].fare,
+                                it.fare,
                                 car = null,
                                 0,
                                 0,
@@ -176,8 +203,7 @@ class BasicService(
                             )
                         )
 
-                        driverSearchRepository.delete(it[0])
-                        client.used = false
+                        driverSearchRepository.delete(it)
                     }
                     ?: return ResponseEntity(
                         "User does not has pending order",
@@ -190,10 +216,49 @@ class BasicService(
             )
 
 
-        return ResponseEntity(HttpStatus.OK)
+        return ResponseEntity("Client canceled order while searching for driver", HttpStatus.OK)
     }
 
-    fun takeOrder(id: Int, driverUsername: String): ResponseEntity<String> {
+    fun cancelOrderClient(clientUsername: String): ResponseEntity<String> {
+        clientRepository.findByIdOrNull(clientUsername)
+            ?.let { client ->
+                ridesInProgressRepository.findAllByClientUsername(client.username).myNullCheck()
+                    ?.let {
+                        ridesHistoryRepository.save(
+                            RidesHistory(
+                                null,
+                                it.pickUpLocation,
+                                it.dropOffLocation,
+                                "DefaultPickUpTimeRidesHistory",
+                                "DefaultDropOffTiimeRidesHistory",
+                                "Client canceled order",
+                                client,
+                                it.driver,
+                                it.fare,
+                                it.car,
+                                0,
+                                0,
+                                0
+                            )
+                        )
+
+                        ridesInProgressRepository.delete(it)
+                    }
+                    ?: return ResponseEntity(
+                        "User does not has pending order",
+                        HttpStatus.BAD_REQUEST
+                    )
+            }
+            ?: return ResponseEntity(
+                "User not found for cancelTaxi",
+                HttpStatus.NOT_FOUND
+            )
+
+
+        return ResponseEntity("Client canceled order while searching for driver", HttpStatus.OK)
+    }
+
+    fun takeOrder(id: Int, driverUsername: String, plateId: String): ResponseEntity<String> {
         val driver = driverRepository.findByIdOrNull(driverUsername)
             ?.also { driver ->
                 ridesInProgressRepository.findAllByClientUsername(driver.username).myNullCheck()
@@ -205,8 +270,9 @@ class BasicService(
 
         driverSearchRepository.findByIdOrNull(id)
             ?.let { curDriverSearch ->
-                if (curDriverSearch.client.used)
-                    return ResponseEntity("User is already used in takeOrder", HttpStatus.BAD_REQUEST)
+                if (ridesInProgressRepository.existsByClientUsername(curDriverSearch.client.username)) {
+                    return ResponseEntity("Somebody has already taken order", HttpStatus.BAD_REQUEST)
+                }
 
                 ridesInProgressRepository
                     .save(
@@ -219,15 +285,12 @@ class BasicService(
                             curDriverSearch.client,
                             curDriverSearch.fare,
                             driver,
-                            carRepository.findByIdOrNull(driver.currentCar) ?: return ResponseEntity(
+                            carRepository.findByIdOrNull(plateId) ?: return ResponseEntity(
                                 "No car found for driver in takeOrder",
                                 HttpStatus.NOT_FOUND
                             )
                         )
                     )
-                    .also {
-                        driver.currentOrder = it.id
-                    }
 
                 driverSearchRepository.delete(curDriverSearch)
             }
@@ -240,15 +303,12 @@ class BasicService(
         val driver = driverRepository.findByIdOrNull(driverUsername)
             ?: return ResponseEntity("Driver not found for carArrived", HttpStatus.NOT_FOUND)
 
-        driver.currentOrder
-            ?.let {
-                ridesInProgressRepository.findByIdOrNull(it)
-                    ?.let { curRideInProgress ->
-                        curRideInProgress.status = "Driver is waiting"
-                    }
-                    ?: return ResponseEntity("No ride found in carArrived", HttpStatus.NOT_FOUND)
+        ridesInProgressRepository.findAllByDriverUsername(driver.username).myNullCheck()
+            ?.let { curRideInProgress ->
+                curRideInProgress.status = "Driver is waiting"
             }
-            ?: return ResponseEntity("No order for driver in carArrived", HttpStatus.BAD_REQUEST)
+            ?: return ResponseEntity("No ride found in carArrived", HttpStatus.NOT_FOUND)
+
 
         return ResponseEntity(HttpStatus.OK)
     }
@@ -257,15 +317,11 @@ class BasicService(
         val driver = driverRepository.findByIdOrNull(driverUsername)
             ?: return ResponseEntity("Driver not found for orderStartRide", HttpStatus.NOT_FOUND)
 
-        driver.currentOrder
-            ?.let {
-                ridesInProgressRepository.findByIdOrNull(it)
-                    ?.let { curRideInProgress ->
-                        curRideInProgress.status = "Client is in the car, ride is in progress"
-                    }
-                    ?: return ResponseEntity("No ride found for orderStartRide", HttpStatus.NOT_FOUND)
+        ridesInProgressRepository.findAllByDriverUsername(driver.username).myNullCheck()
+            ?.let { curRideInProgress ->
+                curRideInProgress.status = "Client is in the car, ride is in progress"
             }
-            ?: return ResponseEntity("No order for driver in orderStartRide", HttpStatus.BAD_REQUEST)
+            ?: return ResponseEntity("No ride found for orderStartRide", HttpStatus.NOT_FOUND)
 
         return ResponseEntity(HttpStatus.OK)
     }
@@ -274,38 +330,86 @@ class BasicService(
         val driver = driverRepository.findByIdOrNull(driverUsername)
             ?: return ResponseEntity("Driver not found for orderCompleted", HttpStatus.NOT_FOUND)
 
-        driver.currentOrder
-            ?.let {
-                ridesInProgressRepository.findByIdOrNull(it)
-                    ?.let { curRideInProgress ->
-                        ridesHistoryRepository.save(
-                            RidesHistory(
-                                null,
-                                curRideInProgress.pickUpLocation,
-                                curRideInProgress.dropOffLocation,
-                                curRideInProgress.pickUpTime,
-                                Clock.systemUTC().instant().toString(),
-                                "Ride is completed successfully",
-                                curRideInProgress.client,
-                                curRideInProgress.driver,
-                                curRideInProgress.fare,
-                                curRideInProgress.car,
-                                cost,
-                                5,
-                                5
-                            )
-                        )
+        ridesInProgressRepository.findAllByDriverUsername(driver.username).myNullCheck()
+            ?.let { curRideInProgress ->
+                ridesHistoryRepository.save(
+                    RidesHistory(
+                        null,
+                        curRideInProgress.pickUpLocation,
+                        curRideInProgress.dropOffLocation,
+                        curRideInProgress.pickUpTime,
+                        Clock.systemUTC().instant().toString(),
+                        "Ride is completed successfully",
+                        curRideInProgress.client,
+                        curRideInProgress.driver,
+                        curRideInProgress.fare,
+                        curRideInProgress.car,
+                        cost,
+                        5,
+                        5
+                    )
+                )
 
-                        ridesInProgressRepository.delete(curRideInProgress)
-                    }
-                    ?: return ResponseEntity("No ride found for orderCompleted", HttpStatus.BAD_REQUEST)
+                ridesInProgressRepository.delete(curRideInProgress)
             }
-            ?: return ResponseEntity("Driver not found for orderCompleted", HttpStatus.NOT_FOUND)
+            ?: return ResponseEntity("No ride found for orderCompleted", HttpStatus.BAD_REQUEST)
 
         return ResponseEntity(HttpStatus.OK)
     }
 
+    fun cancelOrderDriver(driverUsername: String): ResponseEntity<String> {
+        driverRepository.findByIdOrNull(driverUsername)
+            ?.let { driver ->
+                ridesInProgressRepository.findAllByDriverUsername(driver.username).myNullCheck()
+                    ?.let {
+                        ridesHistoryRepository.save(
+                            RidesHistory(
+                                null,
+                                it.pickUpLocation,
+                                it.dropOffLocation,
+                                it.pickUpTime,
+                                "DefaultDropOffTiimeRidesHistory",
+                                "Client canceled driver search",
+                                it.client,
+                                driver = null,
+                                it.fare,
+                                it.car,
+                                0,
+                                0,
+                                0
+                            )
+                        )
+
+                        ridesInProgressRepository.delete(it)
+                    }
+                    ?: return ResponseEntity(
+                        "Driver does not has pending order",
+                        HttpStatus.BAD_REQUEST
+                    )
+            }
+            ?: return ResponseEntity(
+                "Driver was not found for cancelTaxiDriver",
+                HttpStatus.NOT_FOUND
+            )
+
+
+        return ResponseEntity("Driver canceled order while getting to the client's location", HttpStatus.OK)
+    }
+
     fun availableOrders() = getDriverSearches()
+
+    fun startShift(driverUsername: String, plateId: String): String {
+        driverRepository.findByIdOrNull(driverUsername)
+            ?: throw UsernameNotFoundException("Driver $driverUsername not found")
+
+        return jwtService.generateToken(myUserDetailsService.loadUserByUsername(driverUsername), plateId)
+    }
+
+    fun closeShift(driverUsername: String): ResponseEntity<String> {
+        driverRepository.findByIdOrNull(driverUsername)
+            ?: return ResponseEntity("Driver not found for $driverUsername", HttpStatus.NOT_FOUND)
+        return ResponseEntity("Shift is finished", HttpStatus.OK)
+    }
 
 //    fun
     // TODO("Add  functions6")

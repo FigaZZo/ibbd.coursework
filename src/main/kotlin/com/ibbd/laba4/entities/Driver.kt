@@ -28,11 +28,6 @@ class Driver(
         (driver.workExperience ?: throw NullPointerException("WorkExperience is null")),
         (driver.rating ?: 5.0)
     )
-
-    @Transient
-    internal var currentCar: String? = null
-    @Transient
-    internal var currentOrder: Int? = null
 }
 
 data class DriverDTO(

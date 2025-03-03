@@ -31,16 +31,16 @@ enum class Checkings {
             else null
         }
     },
-    RATING {
-        override fun check(value: Any?): String? {
-            return if (value == null ||
-                value !is Double ||
-                value < 0.0 || value > 5.0
-            )
-                "Rating is invalid!\n"
-            else null
-        }
-    },
+//    RATING {
+//        override fun check(value: Any?): String? {
+//            return if (value == null ||
+//                value !is Double ||
+//                value < 0.0 || value > 5.0
+//            )
+//                "Rating is invalid!\n"
+//            else null
+//        }
+//    },TODO("Delete rating check")
     WORK_EXPERIENCE {
         override fun check(value: Any?): String? {
             return if (value == null ||
