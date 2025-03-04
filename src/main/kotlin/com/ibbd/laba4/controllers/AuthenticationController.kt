@@ -27,7 +27,6 @@ class AuthenticationController(
 ) {
     @PostMapping(value = ["/driver/register"])
     fun postDriver(@ModelAttribute("driver") driver: DriverDTO): ResponseEntity<String> {
-        logger.info { "Driver is $driver" }
 
         driver.run {
             val error = StringBuilder().also { sb ->
@@ -42,6 +41,8 @@ class AuthenticationController(
                 throw InvalidDataInput(error.toString())
             }
         }
+
+        logger.info { "New $driver is being registered" }
 
         basicService.addDriver(Driver(driver), passwordEncoder.encode(driver.password), "ROLE_DRIVER")
         basicService.verify(driver.username!!, driver.password!!).also {
@@ -66,7 +67,8 @@ class AuthenticationController(
             }
         }
 
-        logger.info { "client is $client" }
+        logger.info { "New $client is being registered" }
+
 
         basicService.addUser(Client(client), passwordEncoder.encode(client.password), "ROLE_CLIENT")
         basicService.verify(client.username!!, client.password!!).also {
@@ -81,6 +83,8 @@ class AuthenticationController(
         @RequestParam username: String,
         @RequestParam password: String
     ): ResponseEntity<String> {
+        logger.info { "Login request received for $username" }
+
         basicService.verify(username, password).also {
             return ResponseEntity.ok()
                 .header("Authorization", "Bearer:$it")
@@ -93,6 +97,8 @@ class AuthenticationController(
         @RequestParam username: String,
         @RequestParam password: String
     ): ResponseEntity<String> {
+        logger.info { "Login request received for $username" }
+
         basicService.verify(username, password).also {
             return ResponseEntity.ok()
                 .header("Authorization", "Bearer:$it")

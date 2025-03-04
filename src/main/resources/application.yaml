@@ -6,9 +6,9 @@ spring:
   application:
     name: laba4
   datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
-    username: postgres
-    password: admin
+    url: ${url}
+    username: ${username}
+    password: ${password}
   jpa:
     hibernate.ddl-auto: validate
     properties.hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -17,9 +17,9 @@ spring:
 logging:
   level:
     root: INFO
-    org.hibernate.type: TRACE
-    org.hibernate.SQL: TRACE
-    org.springframework.web: trace
+#    org.hibernate.type: TRACE
+#    org.hibernate.SQL: TRACE
+#    org.springframework.web: trace
 server:
   error:
     whitelabel:
