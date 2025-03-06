@@ -23,9 +23,9 @@ class SecurityConfig (
             .csrf{ it.disable() }
             .authorizeHttpRequests {
                 it.requestMatchers(
-                    "/user/login",
+                    "/client/login",
                     "/login",
-                    "/user/register",
+                    "/client/register",
                     "/driver/login",
                     "/driver/register"
                 ).permitAll()

@@ -396,7 +396,15 @@ class BasicService(
         return ResponseEntity("Driver canceled order while getting to the client's location", HttpStatus.OK)
     }
 
-    fun availableOrders() = getDriverSearches()
+    fun availableOrders(plateId: String): Map<String, Any> {
+        carRepository.findByIdOrNull(plateId)
+            ?.let{
+                return mapOf(
+                    "AvailabaleOrders" to driverSearchRepository.findAllByFare(it.fare)
+                )
+            }
+            ?: throw NoSuchElementException("No available order found for $plateId")
+    }
 
     fun startShift(driverUsername: String, plateId: String): String {
         driverRepository.findByIdOrNull(driverUsername)
@@ -410,7 +418,4 @@ class BasicService(
             ?: return ResponseEntity("Driver not found for $driverUsername", HttpStatus.NOT_FOUND)
         return ResponseEntity("Shift is finished", HttpStatus.OK)
     }
-
-//    fun
-    // TODO("Add  functions6")
 }

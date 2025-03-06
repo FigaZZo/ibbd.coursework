@@ -15,7 +15,7 @@ val logger = KotlinLogging.logger {}
 fun main(args: Array<String>) {
 
     logger.info { "Getting environment variables" }
-    EnvLoader.loadEnvFile("src/main/kotlin/com/ibbd/laba4/entities/envFile.txt")
+    EnvLoader.loadEnvFile("src/main/resources/static/envFile.txt")
 
     runApplication<Laba4Application>(*args)
     logger.info { "Application hast started" }

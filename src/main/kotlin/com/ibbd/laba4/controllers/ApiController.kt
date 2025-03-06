@@ -230,14 +230,14 @@ class ApiController(
     }
 
     @PostMapping(value = ["/driver/availableOrders"])
-    fun getAvailableOrders(@AuthenticationPrincipal userDetails: UserDetails): Map<String, Any> {
+    fun getAvailableOrders(@AuthenticationPrincipal userDetails: UserDetails, request: HttpServletRequest): Map<String, Any> {
         if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
         logger.info { "${userDetails.username} requested available orders list" }
 
-        return basicService.availableOrders()
+        return basicService.availableOrders(getCar(request))
     }
 
     @PostMapping(value = ["/driver/takeOrder"], consumes = [MediaType.APPLICATION_JSON_VALUE])

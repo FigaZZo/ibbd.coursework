@@ -17,9 +17,9 @@ spring:
 logging:
   level:
     root: INFO
-#    org.hibernate.type: TRACE
-#    org.hibernate.SQL: TRACE
-#    org.springframework.web: trace
+    org.hibernate.type: TRACE
+    org.hibernate.SQL: TRACE
+    org.springframework.web: trace
 server:
   error:
     whitelabel:
