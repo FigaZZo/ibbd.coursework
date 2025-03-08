@@ -17,10 +17,10 @@ class DriverSearch(
     val pickUpLocation: String,
     @Column(name = "drop_off_location")
     val dropOffLocation: String,
-    @OneToOne(cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_username")
     val client: Client,
-    @ManyToOne(cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "fare_type")
     val fare: FareType
 ) {
@@ -33,16 +33,16 @@ class DriverSearch(
     )
     constructor(driver: DriverSearchDTO, client: Client, fare: FareType) : this(
         null,
-        driver.pickUpLocation?.let{ "(${it.first}, ${it.second})" } ?: throw NullPointerException("Invalid pick up location"),
-        driver.dropOffLocation?.let{ "(${it.first}, ${it.second})" } ?: throw NullPointerException("Invalid drop off location"),
+        driver.pickUpLocation ?: throw NullPointerException("Invalid pick up location"),
+        driver.dropOffLocation ?: throw NullPointerException("Invalid drop off location"),
         client,
         fare
     ) {}
 }
 
 data class DriverSearchDTO(
-    var pickUpLocation: Pair<Double, Double>? = null,
-    var dropOffLocation: Pair<Double, Double>? = null,
+    var pickUpLocation: String? = null,
+    var dropOffLocation: String? = null,
     var client: String? = null,
     var fare: String? = null,
     var id: Int? = null

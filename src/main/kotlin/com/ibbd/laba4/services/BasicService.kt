@@ -1,6 +1,7 @@
 package com.ibbd.laba4.services
 
 import com.ibbd.laba4.controllers.InternalServerError
+import com.ibbd.laba4.controllers.InvalidDataInput
 import com.ibbd.laba4.controllers.UniqueId
 import com.ibbd.laba4.repositories.*
 import org.springframework.stereotype.Service
@@ -17,9 +18,14 @@ import java.time.Clock
 private val logger = KotlinLogging.logger {}
 
 private fun <T> List<T>.myNullCheck(): T? {
-    if(this.isEmpty()) return null
-    if(this.size > 1) throw InternalServerError("Database storage error")
+    if (this.isEmpty()) return null
+    if (this.size > 1) throw InternalServerError("Database storage error")
     return this[0]
+}
+
+private fun <T> List<T>.myNullCheck2(): List<T>? {
+    if (this.isEmpty()) return null
+    return this
 }
 
 @Service
@@ -80,16 +86,14 @@ class BasicService(
 
     fun getClientPersonalInfo(username: String): Map<String, Any> {
         return mapOf(
-            "Rides" to (ridesHistoryRepository.findByClientUsername(username) ?: "No rides"),
             "Personal info" to clientRepository.findById(username)
         )
     }
 
     fun getDriverPersonalInfo(username: String): Map<String, Any> {
         return mapOf(
-            "Rides" to (ridesHistoryRepository.findByDriverUsername(username) ?: "No rides"),
             "Personal info" to driverRepository.findById(username),
-            "Cars" to (carRepository.findByDriverUsername(username) ?: "No cars")
+            "Cars" to (carRepository.findAllByDriverUsername(username).myNullCheck2() ?: "No cars")
         )
     }
 
@@ -172,7 +176,10 @@ class BasicService(
             if (driverSearchRepository.existsByClientUsername(it.client.username) ||
                 ridesInProgressRepository.existsByClientUsername(it.client.username)
             ) {
-                return ResponseEntity("Client cannot call another taxi while having active order", HttpStatus.BAD_REQUEST)
+                return ResponseEntity(
+                    "Client cannot call another taxi while having active order",
+                    HttpStatus.BAD_REQUEST
+                )
             }
             driverSearchRepository.save(it)
         }
@@ -203,7 +210,7 @@ class BasicService(
                             )
                         )
 
-                        driverSearchRepository.delete(it)
+                        driverSearchRepository.deleteById(it.id!!)
                     }
                     ?: return ResponseEntity(
                         "User does not has pending order",
@@ -242,7 +249,7 @@ class BasicService(
                             )
                         )
 
-                        ridesInProgressRepository.delete(it)
+                        ridesInProgressRepository.deleteById(it.id!!)
                     }
                     ?: return ResponseEntity(
                         "User does not has pending order",
@@ -292,7 +299,7 @@ class BasicService(
                         )
                     )
 
-                driverSearchRepository.delete(curDriverSearch)
+                driverSearchRepository.deleteById(curDriverSearch.id!!)
             }
             ?: return ResponseEntity("Order not found for takeOrder", HttpStatus.NOT_FOUND)
 
@@ -306,8 +313,10 @@ class BasicService(
         ridesInProgressRepository.findAllByDriverUsername(driver.username).myNullCheck()
             ?.let { curRideInProgress ->
                 curRideInProgress.status = "Driver is waiting"
+                ridesInProgressRepository.save(curRideInProgress)
             }
             ?: return ResponseEntity("No ride found in carArrived", HttpStatus.NOT_FOUND)
+
 
 
         return ResponseEntity(HttpStatus.OK)
@@ -320,6 +329,7 @@ class BasicService(
         ridesInProgressRepository.findAllByDriverUsername(driver.username).myNullCheck()
             ?.let { curRideInProgress ->
                 curRideInProgress.status = "Client is in the car, ride is in progress"
+                ridesInProgressRepository.save(curRideInProgress)
             }
             ?: return ResponseEntity("No ride found for orderStartRide", HttpStatus.NOT_FOUND)
 
@@ -350,7 +360,7 @@ class BasicService(
                     )
                 )
 
-                ridesInProgressRepository.delete(curRideInProgress)
+                ridesInProgressRepository.deleteById(curRideInProgress.id!!)
             }
             ?: return ResponseEntity("No ride found for orderCompleted", HttpStatus.BAD_REQUEST)
 
@@ -368,10 +378,10 @@ class BasicService(
                                 it.pickUpLocation,
                                 it.dropOffLocation,
                                 it.pickUpTime,
-                                "DefaultDropOffTiimeRidesHistory",
-                                "Client canceled driver search",
+                                "DefaultDropOffTimeRidesHistory",
+                                "Driver canceled order while heading towards pick up location",
                                 it.client,
-                                driver = null,
+                                it.driver,
                                 it.fare,
                                 it.car,
                                 0,
@@ -380,7 +390,7 @@ class BasicService(
                             )
                         )
 
-                        ridesInProgressRepository.delete(it)
+                        ridesInProgressRepository.deleteById(it.id!!)
                     }
                     ?: return ResponseEntity(
                         "Driver does not has pending order",
@@ -398,12 +408,44 @@ class BasicService(
 
     fun availableOrders(plateId: String): Map<String, Any> {
         carRepository.findByIdOrNull(plateId)
-            ?.let{
+            ?.let {
                 return mapOf(
-                    "AvailabaleOrders" to driverSearchRepository.findAllByFare(it.fare)
+                    "AvailabaleOrders" to (driverSearchRepository.findAllByFare(it.fare).myNullCheck2()
+                        ?.let {
+                            it.map {
+                                mapOf(
+                                    "Pick up location" to it.pickUpLocation,
+                                    "Drop off location" to it.dropOffLocation,
+                                    "Client's rating" to it.client.rating,
+                                    "Fare type" to it.fare.fareType
+                                )
+                            }
+                        }
+                        ?: "No available orders")
                 )
             }
             ?: throw NoSuchElementException("No available order found for $plateId")
+    }
+
+    fun  carsReport(username: String): Map<String, Any> {
+        return mapOf(
+            "Cars" to (carRepository.findAllByDriverUsername(username).myNullCheck2()
+                ?.let { cars ->
+                    cars.map {
+                        mapOf(
+                            "Plate" to it.plate,
+                            "Model" to it.model,
+                            "Amount of rides" to ridesHistoryRepository.countByCarPlate(it.plate),
+                            "Average ride price" to (ridesHistoryRepository.findAllByCarPlate(it.plate).myNullCheck2()
+                                ?.let {
+                                    it.map { it.cost }.average()
+                                }
+                                ?: "No rides")
+                        )
+                    }
+                }
+                ?: "No cars")
+        )
     }
 
     fun startShift(driverUsername: String, plateId: String): String {
@@ -417,5 +459,49 @@ class BasicService(
         driverRepository.findByIdOrNull(driverUsername)
             ?: return ResponseEntity("Driver not found for $driverUsername", HttpStatus.NOT_FOUND)
         return ResponseEntity("Shift is finished", HttpStatus.OK)
+    }
+
+    fun clientRideInfo(username: String): Map<String, Any> {
+        clientRepository.findByIdOrNull(username)
+            ?.let { client ->
+                return ridesInProgressRepository.findAllByClientUsername(client.username).myNullCheck()
+                    ?.let {
+                        mapOf(
+                            "Pick up location" to it.pickUpLocation,
+                            "Drop off location" to it.dropOffLocation,
+                            "Current location" to it.car.location,
+                            "Driver's name" to it.driver.name,
+                            "Driver's rating" to it.driver.rating
+                        )
+                    }
+                    ?: mapOf(
+                        "Ride status" to "No ride found for client"
+                    )
+            }
+            ?: throw InvalidDataInput("No client found with username $username")
+    }
+
+    fun clientHistory(username: String): Map<String, Any> {
+        clientRepository.findByIdOrNull(username)
+            ?.let { client ->
+                return ridesHistoryRepository.findAllByClientUsername(client.username).myNullCheck2()
+                    ?.let {
+                        mapOf(
+                            "Rides" to it.map {
+                                mapOf(
+                                    "Pick up location" to it.pickUpLocation,
+                                    "Drop off location" to it.dropOffLocation,
+                                    "Driver" to it.driver!!.username,
+                                    "Pick up time" to it.pickUpTime,
+                                    "Drop off time" to it.dropOffTime,
+                                    "Car" to it.car!!.model,
+                                    "Price" to it.cost
+                                )
+                            }
+                        )
+                    }
+                    ?: mapOf("Rides" to "No rides found")
+            }
+            ?: throw InvalidDataInput("No client found with username $username")
     }
 }

@@ -1,18 +1,27 @@
 package com.ibbd.laba4.services
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
-import io.jsonwebtoken.SignatureAlgorithm
 import io.jsonwebtoken.security.Keys
+import org.springframework.core.env.Environment
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.stereotype.Service
 import java.util.Date
 import javax.crypto.SecretKey
 
+private val logger = KotlinLogging.logger {}
+
 @Service
-class JwtService {
-    private val secretKey: SecretKey = Keys.secretKeyFor(SignatureAlgorithm.HS256)
-    private val jwtExpirationInMs: Long = 1000 * 60 * 60 // 1 hour
+class JwtService(val env: Environment) {
+    private  val secretKeyString: String = env.getProperty("jwt_token") ?: throw NullPointerException("JWT token is missing")
+
+    private val secretKey: SecretKey = Keys.hmacShaKeyFor(secretKeyString.toByteArray())
+    private val jwtExpirationInMs: Long = 1000 * 60 * 30// 1 hour
+
+    init {
+        logger.info { "Created JWT token: $secretKey" }
+    }
 
     fun generateToken(userDetails: UserDetails, plateId: String? = null): String {
         val claims: Map<String, Any> = hashMapOf<String, Any>("plateId" to (plateId ?: "null"))

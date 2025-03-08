@@ -27,7 +27,8 @@ class SecurityConfig (
                     "/login",
                     "/client/register",
                     "/driver/login",
-                    "/driver/register"
+                    "/driver/register",
+                    "/defaultPage"
                 ).permitAll()
                 it.anyRequest().authenticated()
             }

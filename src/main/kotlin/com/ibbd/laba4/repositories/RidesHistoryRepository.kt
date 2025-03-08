@@ -6,7 +6,9 @@ import org.springframework.stereotype.Repository
 
 @Repository
 interface RidesHistoryRepository: JpaRepository<RidesHistory, Int> {
-    fun findByClientUsername(username: String): RidesHistory?
+    fun findAllByClientUsername(username: String): List<RidesHistory>
 
-    fun findByDriverUsername(driverUsername: String): RidesHistory?
+    fun countByCarPlate(carPlate: String): Int
+
+    fun findAllByCarPlate(carPlate: String): List<RidesHistory>
 }

@@ -1,7 +1,6 @@
 package com.ibbd.laba4.entities
 
 import jakarta.persistence.*
-import org.postgresql.geometric.PGpoint
 
 @Entity
 @Table(name = "car")
@@ -18,10 +17,10 @@ class Car(
 //    @Column(name = "status")
 //    @Enumerated(EnumType.STRING)
 //    var status: CarStatus,
-    @ManyToOne(cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_username")
     val driver: Driver,
-    @ManyToOne(cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "fare_type")
     val fare: FareType
 ) {
@@ -32,7 +31,7 @@ class Car(
         (car.plate ?: throw NullPointerException("Plate is null")),
         (car.model ?: throw NullPointerException("Model is null")),
         (car.color ?: throw NullPointerException("Color is null")),
-        (car.location?.let{ "(${it.first}, ${it.second})" } ?: throw NullPointerException("Location is null")),
+        (car.location ?: throw NullPointerException("Location is null")),
         driver,
         fare
     )
@@ -42,7 +41,7 @@ data class CarDTO(
     var plate: String? = null,
     var model: String? = null,
     var color: String? = null,
-    var location: Pair<Double, Double>? = null,
+    var location: String? = null,
     var driver: String? = null,
     var fare: String? = null
 ) {

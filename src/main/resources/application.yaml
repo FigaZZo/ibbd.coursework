@@ -24,3 +24,6 @@ server:
   error:
     whitelabel:
       enabled: false
+jwt:
+  secret:
+    key: ${jwt_token}

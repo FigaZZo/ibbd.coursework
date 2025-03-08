@@ -27,13 +27,16 @@ class ApiController(
     private val jwtService: JwtService
 ) {
 
-    private fun getCar(request: HttpServletRequest): String {
+    private fun getToken(request: HttpServletRequest): String {
         val authHeader = request.getHeader("Authorization")
-        return if (authHeader != null && authHeader.startsWith("Bearer:")) {
-            jwtService.extractPlateId(authHeader.substring(7))
-        } else {
-            "No token found"
+        if (authHeader != null && authHeader.startsWith("Bearer")) {
+            return authHeader.substring(7)
         }
+        throw AccessDeniedException("Access denied")
+    }
+
+    private fun getCar(request: HttpServletRequest): String {
+        return jwtService.extractPlateId(getToken(request))
     }
 
     @PostMapping(value = ["/fareType/add"])
@@ -112,7 +115,7 @@ class ApiController(
 
     @GetMapping(value = ["/client/account"])
     fun accountPageUser(@AuthenticationPrincipal userDetails: UserDetails): Map<String, Any> {
-        if (userDetails.authorities.first().authority != "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
         logger.info { "${userDetails.username} requested accoung information" }
 
         return basicService.getClientPersonalInfo(userDetails.username)
@@ -123,15 +126,15 @@ class ApiController(
         @RequestBody taxi: DriverSearchDTO,
         @AuthenticationPrincipal userDetails: UserDetails
     ): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
         logger.info { "Client requested a taxi" }
 
         taxi.run {
             val error = StringBuilder().also { sb ->
                 Checkings.USERNAME.check(userDetails.username)?.let { sb.append(it) }
                 Checkings.STRING.check(fare)?.let { sb.append(it) }
-                Checkings.LOCATION.check(pickUpLocation)?.let { sb.append(it) }
-                Checkings.LOCATION.check(dropOffLocation)?.let { sb.append(it) }
+//                Checkings.LOCATION.check(pickUpLocation)?.let { sb.append(it) }
+//                Checkings.LOCATION.check(dropOffLocation)?.let { sb.append(it) }
             }
 
             if (error.isNotEmpty()) {
@@ -143,9 +146,37 @@ class ApiController(
         return basicService.callTaxi(taxi.copy(client = userDetails.username))
     }
 
+    @GetMapping(value = ["/client/rideInfo"])
+    fun clientRideInfo(
+        @AuthenticationPrincipal userDetails: UserDetails
+    ): Map<String, Any> {
+        if (userDetails.authorities.first().authority == "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        logger.info { "Request to rideInfo" }
+
+        Checkings.USERNAME.check(userDetails.username)?.let { throw AccessDeniedException("You are not allowed to access this resource") }
+
+        logger.info { "${userDetails.username} requested ride info" }
+
+        return basicService.clientRideInfo(userDetails.username)
+    }
+
+    @GetMapping(value = ["/client/history"])
+    fun clientHistory(
+        @AuthenticationPrincipal userDetails: UserDetails
+    ): Map<String, Any> {
+        if (userDetails.authorities.first().authority == "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        logger.info { "Request to clientHistory" }
+
+        Checkings.USERNAME.check(userDetails.username)?.let { throw AccessDeniedException("You are not allowed to access this resource") }
+
+        logger.info { "${userDetails.username} requested history" }
+
+        return basicService.clientHistory(userDetails.username)
+    }
+
     @DeleteMapping(value = ["/client/cancelSearch"])
     fun cancelSearch(@AuthenticationPrincipal userDetails: UserDetails): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -156,7 +187,7 @@ class ApiController(
 
     @DeleteMapping(value = ["/client/cancelOrder"])
     fun cancelOrder(@AuthenticationPrincipal userDetails: UserDetails): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -165,16 +196,18 @@ class ApiController(
         return userDetails.username?.let { basicService.cancelOrderClient(it) } ?: throw InvalidDataInput("Invalid user")
     }
 
+
+
     @PostMapping(value = ["/driver/registerCar"])
     fun postCar(@RequestBody car: CarDTO, @AuthenticationPrincipal userDetails: UserDetails): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         car.run {
             val error = StringBuilder().also { sb ->
                 Checkings.PLATE.check(plate)?.let { sb.append(it) }
                 Checkings.STRING.check(model)?.let { sb.append(it) }
                 Checkings.STRING.check(color)?.let { sb.append(it) }
-                Checkings.LOCATION.check(location)?.let { sb.append(it) }
+//                Checkings.LOCATION.check(location)?.let { sb.append(it) }
                 Checkings.USERNAME.check(userDetails.username)?.let { sb.append(it) }
                 Checkings.STRING.check(fare)?.let { sb.append(it) }
             }
@@ -191,7 +224,7 @@ class ApiController(
 
     @PostMapping(value = ["/driver/account"])
     fun accountPageDriver(@AuthenticationPrincipal userDetails: UserDetails): Map<String, Any> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -200,27 +233,9 @@ class ApiController(
         return basicService.getDriverPersonalInfo(userDetails.username)
     }
 
-    @PostMapping(value = ["/driver/startShift"])
-    fun startShiftDriver(
-        @RequestBody plateId: String,
-        @AuthenticationPrincipal userDetails: UserDetails
-    ): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
-
-        Checkings.PLATE.check(plateId)?.let { throw InvalidDataInput(it) }
-        Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
-
-        logger.info { "${userDetails.username} started shift" }
-
-        val token = basicService.startShift(userDetails.username, plateId)
-        return ResponseEntity.ok()
-            .header("Authorization", "Bearer:$token")
-            .body("Shift started")
-    }
-
     @PostMapping(value = ["/driver/closeShift"])
     fun closeShiftDriver(@AuthenticationPrincipal userDetails: UserDetails): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -229,9 +244,12 @@ class ApiController(
         return basicService.closeShift(userDetails.username)
     }
 
-    @PostMapping(value = ["/driver/availableOrders"])
-    fun getAvailableOrders(@AuthenticationPrincipal userDetails: UserDetails, request: HttpServletRequest): Map<String, Any> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+    @GetMapping(value = ["/driver/availableOrders"])
+    fun getAvailableOrders(
+        @AuthenticationPrincipal userDetails: UserDetails,
+        request: HttpServletRequest
+    ): Map<String, Any> {
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -240,11 +258,28 @@ class ApiController(
         return basicService.availableOrders(getCar(request))
     }
 
-    @PostMapping(value = ["/driver/takeOrder"], consumes = [MediaType.APPLICATION_JSON_VALUE])
-    fun takeOrder(@RequestBody id: Int?, @AuthenticationPrincipal userDetails: UserDetails, request: HttpServletRequest): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+    @GetMapping(value = ["/driver/carsReport"])
+    fun getCarsReport(@AuthenticationPrincipal userDetails: UserDetails): Map<String, Any> {
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
+
+        logger.info { "${userDetails.username} requested report about cars' usage" }
+
+        return basicService.carsReport(userDetails.username)
+    }
+
+    @PostMapping(value = ["/driver/takeOrder"], consumes = [MediaType.APPLICATION_JSON_VALUE])
+    fun takeOrder(
+        @RequestBody input: String,
+        @AuthenticationPrincipal userDetails: UserDetails,
+        request: HttpServletRequest
+    ): ResponseEntity<String> {
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
+
+        Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
+
+        val id = input.substringAfter(": ").filter {it in '0'..'9'}.toInt()
 
         logger.info { "${userDetails.username} has taken order - $id" }
 
@@ -256,7 +291,7 @@ class ApiController(
 
     @PostMapping(value = ["/driver/cancelOrder"])
     fun cancelOrderDriver(@AuthenticationPrincipal userDetails: UserDetails): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -267,7 +302,7 @@ class ApiController(
 
     @PostMapping(value = ["/driver/arrived"])
     fun orderArrived(@AuthenticationPrincipal userDetails: UserDetails): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -278,7 +313,7 @@ class ApiController(
 
     @PostMapping(value = ["/driver/startRide"])
     fun rideStarted(@AuthenticationPrincipal userDetails: UserDetails): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
 
@@ -290,9 +325,11 @@ class ApiController(
     @PostMapping(value = ["/driver/completeRide"])
     fun rideCompleted(
         @AuthenticationPrincipal userDetails: UserDetails,
-        @RequestBody cost: Int?
+        @RequestBody input: String
     ): ResponseEntity<String> {
-        if (userDetails.authorities.first().authority != "ROLE_DRIVER") throw AccessDeniedException("Not allowed")
+        if (userDetails.authorities.first().authority == "ROLE_CLIENT") throw AccessDeniedException("Not allowed")
+
+        val cost = input.substringAfter(": ").filter { it in '0'..'9' }.toInt()
 
         Checkings.USERNAME.check(userDetails.username)?.let { throw InvalidDataInput(it) }
         Checkings.INT.check(cost)?.let { throw InvalidDataInput(it) }

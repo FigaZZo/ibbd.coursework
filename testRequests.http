@@ -1,12 +1,7 @@
 
-POST localhost:8080/driver/register
-Content-Type: application/x-www-form-urlencoded
+GET localhost:8080/api/userTable
+Authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJwbGF0ZUlkIjoibnVsbCIsInN1YiI6ImFkbWluIiwiaWF0IjoxNzQxMjQ1NzYxLCJleHAiOjE3NDA1NTA3OTR9.fD-SqkNWSy4wY45EV2GLw17RR8tOPYFtmbo9C0XHMpU"
 
-username = driver9 &
-phoneNumber = 9770000009 &
-name = driver9 &
-workExperience = 9 &
-password = password9
 
 ###
 

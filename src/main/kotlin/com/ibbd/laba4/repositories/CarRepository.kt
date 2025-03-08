@@ -6,5 +6,5 @@ import org.springframework.stereotype.Repository
 
 @Repository
 interface CarRepository: JpaRepository<Car, String> {
-    fun findByDriverUsername(driverUsername: String): Car?
+    fun findAllByDriverUsername(driverUsername: String): List<Car>
 }
